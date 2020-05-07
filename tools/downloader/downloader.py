@@ -28,6 +28,8 @@ import tempfile
 import time
 
 from pathlib import Path
+#from multiprocessing import Pool
+import concurrent.futures
 
 import common
 
@@ -195,6 +197,35 @@ def positive_int_arg(value_str):
 
     raise argparse.ArgumentTypeError('must be a positive integer (got {!r})'.format(value_str))
 
+def download_model(reporter, args, requested_precisions, session, cache, failed_models, model):
+    reporter.emit_event('model_download_begin', model=model.name, num_files=len(model.files))
+
+    output = args.output_dir / model.subdirectory
+    output.mkdir(parents=True, exist_ok=True)
+
+    for model_file in model.files:
+        if len(model_file.name.parts) == 2:
+            p = model_file.name.parts[0]
+            if p in common.KNOWN_PRECISIONS and p not in requested_precisions:
+                continue
+
+        model_file_reporter = reporter.with_event_context(model=model.name, model_file=model_file.name.as_posix())
+        model_file_reporter.emit_event('model_file_download_begin', size=model_file.size)
+
+        destination = output / model_file.name
+
+        if not try_retrieve(model_file_reporter, destination, model_file, cache, args.num_attempts,
+                lambda: model_file.source.start_download(session, CHUNK_SIZE)):
+            shutil.rmtree(str(output))
+            failed_models.add(model.name)
+            model_file_reporter.emit_event('model_file_download_end', successful=False)
+            reporter.emit_event('model_download_end', model=model.name, successful=False)
+            break
+
+        model_file_reporter.emit_event('model_file_download_end', successful=True)
+    else:
+        reporter.emit_event('model_download_end', model=model.name, successful=True)
+
 def main():
     parser = DownloaderArgumentParser()
     parser.add_argument('--name', metavar='PAT[,PAT...]',
@@ -211,6 +242,8 @@ def main():
         help='directory to use as a cache for downloaded files')
     parser.add_argument('--num_attempts', type=positive_int_arg, metavar='N', default=1,
         help='attempt each download up to N times')
+    parser.add_argument('--num_threads', type=positive_int_arg, metavar='N', default=1,
+        help='attempt to download using N threads')
     parser.add_argument('--progress_format', choices=('text', 'json'), default='text',
         help='which format to use for progress reporting')
 
@@ -235,34 +268,16 @@ def main():
 
     reporter.print_group_heading('Downloading models')
     with requests.Session() as session:
-        for model in models:
-            reporter.emit_event('model_download_begin', model=model.name, num_files=len(model.files))
-
-            output = args.output_dir / model.subdirectory
-            output.mkdir(parents=True, exist_ok=True)
-
-            for model_file in model.files:
-                if len(model_file.name.parts) == 2:
-                    p = model_file.name.parts[0]
-                    if p in common.KNOWN_PRECISIONS and p not in requested_precisions:
-                        continue
-
-                model_file_reporter = reporter.with_event_context(model=model.name, model_file=model_file.name.as_posix())
-                model_file_reporter.emit_event('model_file_download_begin', size=model_file.size)
-
-                destination = output / model_file.name
-
-                if not try_retrieve(model_file_reporter, destination, model_file, cache, args.num_attempts,
-                        lambda: model_file.source.start_download(session, CHUNK_SIZE)):
-                    shutil.rmtree(str(output))
-                    failed_models.add(model.name)
-                    model_file_reporter.emit_event('model_file_download_end', successful=False)
-                    reporter.emit_event('model_download_end', model=model.name, successful=False)
-                    break
-
-                model_file_reporter.emit_event('model_file_download_end', successful=True)
-            else:
-                reporter.emit_event('model_download_end', model=model.name, successful=True)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=args.num_threads) as executor:
+            future_to_model = {executor.submit(download_model, reporter, args, requested_precisions, session, cache, failed_models, model): model for model in models}
+            for future in concurrent.futures.as_completed(future_to_model):
+                model = future_to_model[future]
+                try:
+                    data = future.result()
+                except Exception as exc:
+                    reporter.print('%r generated an exception: %s' % (model.name, exc))
+                else:
+                    reporter.print('completed downloading %r ' % model.name)
 
     reporter.print_group_heading('Post-processing')
     for model in models:
