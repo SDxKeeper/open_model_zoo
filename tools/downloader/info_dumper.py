@@ -23,9 +23,31 @@ from pathlib import Path
 import common
 
 def to_info(model):
-    return {
-        'name': model.name,
+    modelfiles = []
+    input_shape = "unknown"
+    if model.mo_args:
+        for arg in model.mo_args:
+            if "input_shape" in arg:
+                shape_list = list(json.loads("[" + arg.split("=")[1]+"]"))
 
+                input_strs=[]
+                for input in shape_list:
+                    input_strs.append("x".join(str(x) for x in input))
+                input_shape = "_".join(input_strs)
+
+
+
+    for modelfile in model.files:
+        modelfiles.append(
+            {
+                'name': str(modelfile.name),
+                'sha256': modelfile.sha256,
+                'source': str(modelfile.source)
+            })
+    model_info = {
+        'name': model.name,
+        'model_id': f"{model.name}-fw_{model.framework}-input_{input_shape}",
+        'files': modelfiles,
         'description': model.description,
         'framework': model.framework,
         'license_url': model.license_url,
@@ -33,6 +55,10 @@ def to_info(model):
         'subdirectory': str(model.subdirectory),
         'task_type': str(model.task_type),
     }
+    if model.postprocessing:
+        model_info['postprocessing'] = True
+
+    return model_info
 
 def main():
     parser = argparse.ArgumentParser()
