@@ -341,6 +341,80 @@ class FileSourceGoogleDrive(FileSource):
 
 FileSource.types['google_drive'] = FileSourceGoogleDrive
 
+class FileSourceGitLfs(FileSource):
+    def __init__(self, repository):
+        if not repository.endswith('/'):
+            repository += '/'
+
+        self.lfs_endpoint = repository + 'info/lfs'
+
+    @classmethod
+    def deserialize(cls, source):
+        return cls(validate_string('"repository"', source['repository'])) # TODO: validate URL
+
+    def start_download(self, session, chunk_size, offset, size, sha256):
+        # TODO: use offset
+
+        batch_response = session.post(self.lfs_endpoint + '/objects/batch',
+            headers={
+                'Accept': 'application/vnd.git-lfs+json',
+                'Content-Type': 'application/vnd.git-lfs+json',
+            },
+            json={
+                'operation': 'download',
+                'objects': [{'oid': sha256, 'size': size}],
+            },
+            timeout=DOWNLOAD_TIMEOUT,
+        )
+        batch_response.raise_for_status()
+
+        batch_response_data = batch_response.json()
+
+        # TODO: replace all these asserts with exceptions
+        assert isinstance(batch_response_data, dict)
+        if 'transfer' in batch_response_data:
+            assert batch_response_data['transfer'] == 'basic'
+
+        assert 'objects' in batch_response_data
+        assert isinstance(batch_response_data['objects'], list)
+        assert len(batch_response_data['objects']) == 1
+
+        object_data = batch_response_data['objects'][0]
+
+        assert object_data['oid'] == sha256
+        assert object_data['size'] == size
+
+        if 'error' in object_data:
+            assert 'code' in object_data['error']
+            assert isinstance(object_data['error']['code'], int)
+            assert 'message' in object_data['error']
+            assert isinstance(object_data['error']['message'], str)
+            assert False, "LFS error {}: {}".format(object_data['error']['code'], object_data['error']['message'])
+
+        assert 'actions' in object_data
+        assert isinstance(object_data['actions'], dict)
+        assert 'download' in object_data['actions']
+
+        download_data = object_data['actions']['download']
+
+        assert isinstance(download_data, dict)
+        assert 'href' in download_data
+        assert isinstance(download_data['href'], str)
+
+        download_request_headers = {}
+        if 'header' in download_data:
+            assert isinstance(download_data['header'], dict)
+            assert all(isinstance(value, str) for value in download_data['header'].values())
+            download_request_headers = download_data['header']
+
+        download_response = session.get(download_data['href'], headers=download_request_headers,
+            stream=True, timeout=DOWNLOAD_TIMEOUT)
+        download_response.raise_for_status()
+
+        return download_response.iter_content(chunk_size=chunk_size), 0
+
+FileSource.types['git_lfs'] = FileSourceGitLfs
+
 class ModelFile:
     def __init__(self, name, size, sha256, source):
         self.name = name
