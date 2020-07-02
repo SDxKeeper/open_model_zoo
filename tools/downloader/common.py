@@ -290,7 +290,7 @@ class FileSourceHttp(FileSource):
     def deserialize(cls, source):
         return cls(validate_string('"url"', source['url']))
 
-    def start_download(self, session, chunk_size, offset):
+    def start_download(self, session, chunk_size, offset, size, sha256):
         headers = {}
         if offset != 0:
             headers['Range'] = 'bytes={}-'.format(offset)
@@ -325,7 +325,7 @@ class FileSourceGoogleDrive(FileSource):
     def deserialize(cls, source):
         return cls(validate_string('"id"', source['id']))
 
-    def start_download(self, session, chunk_size, offset):
+    def start_download(self, session, chunk_size, offset, size, sha256):
         # for now the offset is ignored; TODO: try to implement resumption
         URL = 'https://docs.google.com/uc?export=download'
         response = session.get(URL, params={'id' : self.id}, stream=True, timeout=DOWNLOAD_TIMEOUT)
