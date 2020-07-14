@@ -31,6 +31,7 @@ from pathlib import Path
 
 import requests
 import yaml
+import os
 
 DOWNLOAD_TIMEOUT = 5 * 60
 MODEL_ROOT = Path(__file__).resolve().parents[2] / 'models'
@@ -39,9 +40,11 @@ MODEL_ROOT = Path(__file__).resolve().parents[2] / 'models'
 KNOWN_FRAMEWORKS = {
     'caffe': None,
     'caffe2': 'caffe2_to_onnx.py',
+    'intel_caffe': None,
     'dldt': None,
     'mxnet': None,
     'onnx': None,
+    'cntk': None,
     'pytorch': 'pytorch_to_onnx.py',
     'tf': None,
 }
@@ -68,6 +71,18 @@ KNOWN_TASK_TYPES = {
     'question_answering',
     'semantic_segmentation',
     'style_transfer',
+    'scene_recognition',
+    'quality_enhancement',
+    'text_prediction',
+    'speech_to_text',
+    'language_representation',
+    'text_translation',
+    'depth_estimation',
+    'voice_recognition',
+    'dna_sequencing',
+    'face_reconstruction',
+    'vehicle_reidentification',
+    'audio_classification'
 }
 
 KNOWN_QUANTIZED_PRECISIONS = {p + '-INT8': p for p in ['FP16', 'FP32']}
@@ -486,49 +501,54 @@ class Model:
                 with deserialization_context('"postprocessing" #{}'.format(i)):
                     postprocessing.append(Postproc.deserialize(postproc))
 
-            framework = validate_string_enum('"framework"', model['framework'], KNOWN_FRAMEWORKS.keys())
+            model_framework = model['framework'].get('name', model['framework'])
+            framework = validate_string_enum('"framework"', model_framework, KNOWN_FRAMEWORKS.keys())
 
             conversion_to_onnx_args = model.get('conversion_to_onnx_args', None)
-            if KNOWN_FRAMEWORKS[framework]:
-                if not conversion_to_onnx_args:
-                    raise DeserializationError('"conversion_to_onnx_args" is absent. '
-                                               'Framework "{}" is supported only by conversion to ONNX.'
-                                               .format(framework))
-                conversion_to_onnx_args = [validate_string('"conversion_to_onnx_args" #{}'.format(i), arg)
-                                           for i, arg in enumerate(model['conversion_to_onnx_args'])]
-            else:
-                if conversion_to_onnx_args:
-                    raise DeserializationError('Conversion to ONNX not supported for "{}" framework'.format(framework))
+            # FIXME:  conversion_to_onnx_args in OneZoo?
+            # if KNOWN_FRAMEWORKS[framework]:
+            #     if not conversion_to_onnx_args:
+            #         raise DeserializationError('"conversion_to_onnx_args" is absent. '
+            #                                    'Framework "{}" is supported only by conversion to ONNX.'
+            #                                    .format(framework))
+            #     conversion_to_onnx_args = [validate_string('"conversion_to_onnx_args" #{}'.format(i), arg)
+            #                                for i, arg in enumerate(model['conversion_to_onnx_args'])]
+            # else:
+            #     if conversion_to_onnx_args:
+            #         raise DeserializationError('Conversion to ONNX not supported for "{}" framework'.format(framework))
 
-            if 'model_optimizer_args' in model:
-                mo_args = [validate_string('"model_optimizer_args" #{}'.format(i), arg)
-                    for i, arg in enumerate(model['model_optimizer_args'])]
+            mo_args = None
+            precisions = {'FP16', 'FP32'}
+            # FIXME model_optimizer_args should be mandatory for OneZoo or optional here?
+            # if 'model_optimizer_args' in model:
+            #     mo_args = [validate_string('"model_optimizer_args" #{}'.format(i), arg)
+            #         for i, arg in enumerate(model['model_optimizer_args'])]
 
-                precisions = {'FP16', 'FP32'}
-            else:
-                if framework != 'dldt':
-                    raise DeserializationError('Model not in IR format, but no conversions defined')
+            #     precisions = {'FP16', 'FP32'}
+            # else:
+            #     if framework != 'dldt':
+            #         raise DeserializationError('Model not in IR format, but no conversions defined')
 
-                mo_args = None
+            #     mo_args = None
+            # FIXME: Precision handling in OneZoo. Currently no enforced rules
+            #     files_per_precision = {}
 
-                files_per_precision = {}
+            #     for file in files:
+            #         if len(file.name.parts) != 2:
+            #             raise DeserializationError('Can\'t derive precision from file name {!r}'.format(file.name))
+            #         p = file.name.parts[0]
+            #         if p not in KNOWN_PRECISIONS:
+            #             raise DeserializationError(
+            #                 'Unknown precision {!r} derived from file name {!r}, expected one of {!r}'.format(
+            #                     p, file.name, KNOWN_PRECISIONS))
+            #         files_per_precision.setdefault(p, set()).add(file.name.parts[1])
 
-                for file in files:
-                    if len(file.name.parts) != 2:
-                        raise DeserializationError('Can\'t derive precision from file name {!r}'.format(file.name))
-                    p = file.name.parts[0]
-                    if p not in KNOWN_PRECISIONS:
-                        raise DeserializationError(
-                            'Unknown precision {!r} derived from file name {!r}, expected one of {!r}'.format(
-                                p, file.name, KNOWN_PRECISIONS))
-                    files_per_precision.setdefault(p, set()).add(file.name.parts[1])
+            #     for precision, precision_files in files_per_precision.items():
+            #         for ext in ['xml', 'bin']:
+            #             if (name + '.' + ext) not in precision_files:
+            #                 raise DeserializationError('No {} file for precision "{}"'.format(ext.upper(), precision))
 
-                for precision, precision_files in files_per_precision.items():
-                    for ext in ['xml', 'bin']:
-                        if (name + '.' + ext) not in precision_files:
-                            raise DeserializationError('No {} file for precision "{}"'.format(ext.upper(), precision))
-
-                precisions = set(files_per_precision.keys())
+            #     precisions = set(files_per_precision.keys())
 
             quantizable = model.get('quantizable', False)
             if not isinstance(quantizable, bool):
@@ -536,7 +556,8 @@ class Model:
 
             description = validate_string('"description"', model['description'])
 
-            license_url = validate_string('"license"', model['license'])
+            license_url = None
+            #license_url = validate_string('"license"', model['license'])
 
             task_type = validate_string_enum('"task_type"', model['task_type'], KNOWN_TASK_TYPES)
 
@@ -547,24 +568,33 @@ def load_models(args):
     models = []
     model_names = set()
 
-    for config_path in sorted(MODEL_ROOT.glob('**/model.yml')):
-        subdirectory = config_path.parent.relative_to(MODEL_ROOT)
+    # TODO Find better place for logic
+    if args.models_json:
+        if not os.path.exists(args.models_json):
+            raise DeserializationError('Serialized models file "{}" doesn\'t exist'.format(args.models_json))
+        with open(args.models_json) as json_file:
+            serialized_models = json.load(json_file)
+        for model in serialized_models:
+            models.append(Model.deserialize(model, model["model_id"], model["subdirectory"]))
+    else:
+        for config_path in sorted(MODEL_ROOT.glob('**/model.yml')):
+            subdirectory = config_path.parent.relative_to(MODEL_ROOT)
 
-        with config_path.open('rb') as config_file, \
-                deserialization_context('In config "{}"'.format(config_path)):
+            with config_path.open('rb') as config_file, \
+                    deserialization_context('In config "{}"'.format(config_path)):
 
-            model = yaml.safe_load(config_file)
+                model = yaml.safe_load(config_file)
 
-            for bad_key in ['name', 'subdirectory']:
-                if bad_key in model:
-                    raise DeserializationError('Unsupported key "{}"'.format(bad_key))
+                for bad_key in ['name', 'subdirectory']:
+                    if bad_key in model:
+                        raise DeserializationError('Unsupported key "{}"'.format(bad_key))
 
-            models.append(Model.deserialize(model, subdirectory.name, subdirectory))
+                models.append(Model.deserialize(model, subdirectory.name, subdirectory))
 
-            if models[-1].name in model_names:
-                raise DeserializationError(
-                    'Duplicate model name "{}"'.format(models[-1].name))
-            model_names.add(models[-1].name)
+                if models[-1].name in model_names:
+                    raise DeserializationError(
+                        'Duplicate model name "{}"'.format(models[-1].name))
+                model_names.add(models[-1].name)
 
     return models
 

@@ -292,6 +292,8 @@ def main():
     # relation to the optimal number of concurrent downloads
     parser.add_argument('-j', '--jobs', type=positive_int_arg, metavar='N', default=1,
         help='how many downloads to perform concurrently')
+    parser.add_argument('--models-json', type=Path, metavar="MODELS.JSON",
+        help='path to json file with serialized models information')
 
     args = parser.parse_args()
 
