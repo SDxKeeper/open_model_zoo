@@ -570,7 +570,7 @@ def load_models(args):
 
     # TODO Find better place for logic
     if args.models_json:
-        if not os.path.exists(args.models_json):
+        if not args.models_json.exists():
             raise DeserializationError('Serialized models file "{}" doesn\'t exist'.format(args.models_json))
         with open(args.models_json) as json_file:
             serialized_models = json.load(json_file)
