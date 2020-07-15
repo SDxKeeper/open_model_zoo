@@ -572,7 +572,7 @@ def load_models(args):
     if args.models_json:
         if not args.models_json.exists():
             raise DeserializationError('Serialized models file "{}" doesn\'t exist'.format(args.models_json))
-        with open(args.models_json) as json_file:
+        with open(args.models_json.as_posix()) as json_file:
             serialized_models = json.load(json_file)
         for model in serialized_models:
             models.append(Model.deserialize(model, model["model_id"], model["subdirectory"]))
