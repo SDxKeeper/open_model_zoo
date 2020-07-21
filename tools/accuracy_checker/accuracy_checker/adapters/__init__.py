@@ -52,7 +52,10 @@ from .detection import (
     FaceDetectionAdapter,
     FaceDetectionRefinementAdapter
 )
-from .detection_person_vehicle import PersonVehicleDetectionAdapter
+from .detection_person_vehicle import (
+    PersonVehicleDetectionAdapter,
+    PersonVehicleDetectionRefinementAdapter
+)
 from .ssd import SSDAdapter, PyTorchSSDDecoder, FacePersonAdapter, SSDAdapterMxNet, SSDONNXAdapter
 from .retinaface import RetinaFaceAdapter
 from .yolo import TinyYOLOv1Adapter, YoloV2Adapter, YoloV3Adapter
@@ -78,6 +81,10 @@ from .image_inpainting import ImageInpaintingAdapter
 from .style_transfer import StyleTransferAdapter
 
 from .attribute_classification import AttributeClassificationAdapter
+from .audio_recognition import CTCBeamSearchDecoder
+
+from .regression import RegressionAdapter
+from .mixed_adapter import MixedAdapter
 
 __all__ = [
     'Adapter',
@@ -98,6 +105,7 @@ __all__ = [
     'FaceDetectionAdapter',
     'FaceDetectionRefinementAdapter',
     'PersonVehicleDetectionAdapter',
+    'PersonVehicleDetectionRefinementAdapter',
 
     'SegmentationAdapter',
     'BrainTumorSegmentationAdapter',
@@ -143,5 +151,10 @@ __all__ = [
     'ImageInpaintingAdapter',
     'StyleTransferAdapter',
 
-    'AttributeClassificationAdapter'
+    'AttributeClassificationAdapter',
+
+    'RegressionAdapter',
+    'MixedAdapter',
+
+    'CTCBeamSearchDecoder',
 ]
