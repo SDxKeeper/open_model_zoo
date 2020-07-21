@@ -367,8 +367,6 @@ class FileSourceGitLfs(FileSource):
         return cls(validate_string('"repository"', source['repository'])) # TODO: validate URL
 
     def start_download(self, session, chunk_size, offset, size, sha256):
-        # TODO: use offset
-
         batch_response = session.post(self.lfs_endpoint + '/objects/batch',
             headers={
                 'Accept': 'application/vnd.git-lfs+json',
@@ -415,7 +413,7 @@ class FileSourceGitLfs(FileSource):
         assert 'href' in download_data
         assert isinstance(download_data['href'], str)
 
-        download_request_headers = {}
+        download_request_headers = self.http_range_headers(offset)
         if 'header' in download_data:
             assert isinstance(download_data['header'], dict)
             assert all(isinstance(value, str) for value in download_data['header'].values())
@@ -425,7 +423,7 @@ class FileSourceGitLfs(FileSource):
             stream=True, timeout=DOWNLOAD_TIMEOUT)
         download_response.raise_for_status()
 
-        return download_response.iter_content(chunk_size=chunk_size), 0
+        return self.handle_http_response(download_response, chunk_size)
 
 FileSource.types['git_lfs'] = FileSourceGitLfs
 
