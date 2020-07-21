@@ -17,6 +17,7 @@ import concurrent.futures
 import contextlib
 import fnmatch
 import json
+import os
 import platform
 import queue
 import re
@@ -367,6 +368,13 @@ class FileSourceGitLfs(FileSource):
         return cls(validate_string('"repository"', source['repository'])) # TODO: validate URL
 
     def start_download(self, session, chunk_size, offset, size, sha256):
+        git_user = os.environ.get('GIT_USER')
+        git_password = os.environ.get('GIT_PASSWORD', '')
+
+        auth = None
+        if git_user is not None:
+            auth = (git_user, git_password)
+
         batch_response = session.post(self.lfs_endpoint + '/objects/batch',
             headers={
                 'Accept': 'application/vnd.git-lfs+json',
@@ -377,6 +385,7 @@ class FileSourceGitLfs(FileSource):
                 'objects': [{'oid': sha256, 'size': size}],
             },
             timeout=DOWNLOAD_TIMEOUT,
+            auth=auth,
         )
         batch_response.raise_for_status()
 
