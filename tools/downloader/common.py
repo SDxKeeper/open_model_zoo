@@ -436,21 +436,23 @@ class FileSourceGitLfs(FileSource):
 
 FileSource.types['git_lfs'] = FileSourceGitLfs
 
-class FileSourceGitlabBlob(FileSource):
-    def __init__(self, gitlab_url, project, blob_id):
+class FileSourceGitlab(FileSource):
+    def __init__(self, gitlab_url, project, revision, path):
         if not gitlab_url.endswith('/'):
             gitlab_url += '/'
 
         self.api_root = gitlab_url + 'api/v4/'
         self.project = project
-        self.blob_id = blob_id
+        self.revision = revision
+        self.path = path
 
     @classmethod
     def deserialize(cls, source):
         return cls(
             validate_string('"gitlab_url"', source['gitlab_url']), # TODO: validate URL
             validate_string('"project"', source['project']),
-            validate_string('"blob_id"', source['blob_id']),
+            validate_string('"revision"', source['revision']),
+            validate_string('"path"', source['path']),
         )
 
     def start_download(self, session, chunk_size, offset, size, sha256):
@@ -460,15 +462,17 @@ class FileSourceGitlabBlob(FileSource):
         if git_token is not None:
             headers['Private-Token'] = git_token
 
-        url = self.api_root + 'projects/{}/repository/blobs/{}/raw'.format(
-            urllib.parse.quote(self.project, safe=''), self.blob_id)
+        url = self.api_root + 'projects/{}/repository/files/{}/raw'.format(
+            urllib.parse.quote(self.project, safe=''),
+            urllib.parse.quote(self.path, safe=''))
 
-        response = session.get(url, headers=headers, timeout=DOWNLOAD_TIMEOUT)
+        response = session.get(url, params={'ref': self.revision},
+            headers=headers, timeout=DOWNLOAD_TIMEOUT)
         response.raise_for_status()
 
         return self.handle_http_response(response, chunk_size)
 
-FileSource.types['gitlab_blob'] = FileSourceGitlabBlob
+FileSource.types['gitlab'] = FileSourceGitlab
 
 class ModelFile:
     def __init__(self, name, size, sha256, source):
