@@ -369,12 +369,11 @@ class FileSourceGitLfs(FileSource):
         return cls(validate_string('"repository"', source['repository'])) # TODO: validate URL
 
     def start_download(self, session, chunk_size, offset, size, sha256):
-        git_user = os.environ.get('GIT_USER')
-        git_password = os.environ.get('GIT_PASSWORD', '')
+        git_token = os.environ.get('GIT_TOKEN')
 
         auth = None
-        if git_user is not None:
-            auth = (git_user, git_password)
+        if git_token is not None:
+            auth = ('', git_token)
 
         batch_response = session.post(self.lfs_endpoint + '/objects/batch',
             headers={
@@ -457,9 +456,9 @@ class FileSourceGitlabBlob(FileSource):
     def start_download(self, session, chunk_size, offset, size, sha256):
         headers = self.http_range_headers(offset)
 
-        git_password = os.environ.get('GIT_PASSWORD')
-        if git_password is not None:
-            headers['Private-Token'] = git_password
+        git_token = os.environ.get('GIT_TOKEN')
+        if git_token is not None:
+            headers['Private-Token'] = git_token
 
         url = self.api_root + 'projects/{}/repository/blobs/{}/raw'.format(
             urllib.parse.quote(self.project, safe=''), self.blob_id)
