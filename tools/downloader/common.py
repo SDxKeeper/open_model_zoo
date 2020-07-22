@@ -27,6 +27,7 @@ import subprocess
 import sys
 import threading
 import traceback
+import urllib.parse
 
 from pathlib import Path
 
@@ -435,6 +436,40 @@ class FileSourceGitLfs(FileSource):
         return self.handle_http_response(download_response, chunk_size)
 
 FileSource.types['git_lfs'] = FileSourceGitLfs
+
+class FileSourceGitlabBlob(FileSource):
+    def __init__(self, gitlab_url, project, blob_id):
+        if not gitlab_url.endswith('/'):
+            gitlab_url += '/'
+
+        self.api_root = gitlab_url + 'api/v4/'
+        self.project = project
+        self.blob_id = blob_id
+
+    @classmethod
+    def deserialize(cls, source):
+        return cls(
+            validate_string('"gitlab_url"', source['gitlab_url']), # TODO: validate URL
+            validate_string('"project"', source['project']),
+            validate_string('"blob_id"', source['blob_id']),
+        )
+
+    def start_download(self, session, chunk_size, offset, size, sha256):
+        headers = self.http_range_headers(offset)
+
+        git_password = os.environ.get('GIT_PASSWORD')
+        if git_password is not None:
+            headers['Private-Token'] = git_password
+
+        url = self.api_root + 'projects/{}/repository/blobs/{}/raw'.format(
+            urllib.parse.quote(self.project, safe=''), self.blob_id)
+
+        response = session.get(url, headers=headers, timeout=DOWNLOAD_TIMEOUT)
+        response.raise_for_status()
+
+        return self.handle_http_response(response, chunk_size)
+
+FileSource.types['gitlab_blob'] = FileSourceGitlabBlob
 
 class ModelFile:
     def __init__(self, name, size, sha256, source):
