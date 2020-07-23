@@ -17,6 +17,7 @@ import concurrent.futures
 import contextlib
 import fnmatch
 import json
+import os
 import platform
 import queue
 import re
@@ -26,6 +27,7 @@ import subprocess
 import sys
 import threading
 import traceback
+import urllib.parse
 
 from pathlib import Path
 
@@ -335,7 +337,7 @@ class FileSourceHttp(FileSource):
     def deserialize(cls, source):
         return cls(validate_string('"url"', source['url']))
 
-    def start_download(self, session, chunk_size, offset):
+    def start_download(self, session, chunk_size, offset, size, sha256):
         response = session.get(self.url, stream=True, timeout=DOWNLOAD_TIMEOUT,
             headers=self.http_range_headers(offset))
         response.raise_for_status()
@@ -352,7 +354,7 @@ class FileSourceGoogleDrive(FileSource):
     def deserialize(cls, source):
         return cls(validate_string('"id"', source['id']))
 
-    def start_download(self, session, chunk_size, offset):
+    def start_download(self, session, chunk_size, offset, size, sha256):
         range_headers = self.http_range_headers(offset)
         URL = 'https://docs.google.com/uc?export=download'
         response = session.get(URL, params={'id' : self.id}, headers=range_headers,
@@ -369,6 +371,123 @@ class FileSourceGoogleDrive(FileSource):
         return self.handle_http_response(response, chunk_size)
 
 FileSource.types['google_drive'] = FileSourceGoogleDrive
+
+class FileSourceGitLfs(FileSource):
+    def __init__(self, repository):
+        if not repository.endswith('/'):
+            repository += '/'
+
+        self.lfs_endpoint = repository + 'info/lfs'
+
+    @classmethod
+    def deserialize(cls, source):
+        return cls(validate_string('"repository"', source['repository'])) # TODO: validate URL
+
+    def start_download(self, session, chunk_size, offset, size, sha256):
+        git_token = os.environ.get('GIT_TOKEN')
+
+        auth = None
+        if git_token is not None:
+            auth = ('', git_token)
+
+        batch_response = session.post(self.lfs_endpoint + '/objects/batch',
+            headers={
+                'Accept': 'application/vnd.git-lfs+json',
+                'Content-Type': 'application/vnd.git-lfs+json',
+            },
+            json={
+                'operation': 'download',
+                'objects': [{'oid': sha256, 'size': size}],
+            },
+            timeout=DOWNLOAD_TIMEOUT,
+            auth=auth,
+        )
+        batch_response.raise_for_status()
+
+        batch_response_data = batch_response.json()
+
+        # TODO: replace all these asserts with exceptions
+        assert isinstance(batch_response_data, dict)
+        if 'transfer' in batch_response_data:
+            assert batch_response_data['transfer'] == 'basic'
+
+        assert 'objects' in batch_response_data
+        assert isinstance(batch_response_data['objects'], list)
+        assert len(batch_response_data['objects']) == 1
+
+        object_data = batch_response_data['objects'][0]
+
+        assert object_data['oid'] == sha256
+        assert object_data['size'] == size
+
+        if 'error' in object_data:
+            assert 'code' in object_data['error']
+            assert isinstance(object_data['error']['code'], int)
+            assert 'message' in object_data['error']
+            assert isinstance(object_data['error']['message'], str)
+            assert False, "LFS error {}: {}".format(object_data['error']['code'], object_data['error']['message'])
+
+        assert 'actions' in object_data
+        assert isinstance(object_data['actions'], dict)
+        assert 'download' in object_data['actions']
+
+        download_data = object_data['actions']['download']
+
+        assert isinstance(download_data, dict)
+        assert 'href' in download_data
+        assert isinstance(download_data['href'], str)
+
+        download_request_headers = self.http_range_headers(offset)
+        if 'header' in download_data:
+            assert isinstance(download_data['header'], dict)
+            assert all(isinstance(value, str) for value in download_data['header'].values())
+            download_request_headers = download_data['header']
+
+        download_response = session.get(download_data['href'], headers=download_request_headers,
+            stream=True, timeout=DOWNLOAD_TIMEOUT)
+        download_response.raise_for_status()
+
+        return self.handle_http_response(download_response, chunk_size)
+
+FileSource.types['git_lfs'] = FileSourceGitLfs
+
+class FileSourceGitlab(FileSource):
+    def __init__(self, gitlab_url, project, revision, path):
+        if not gitlab_url.endswith('/'):
+            gitlab_url += '/'
+
+        self.api_root = gitlab_url + 'api/v4/'
+        self.project = project
+        self.revision = revision
+        self.path = path
+
+    @classmethod
+    def deserialize(cls, source):
+        return cls(
+            validate_string('"gitlab_url"', source['gitlab_url']), # TODO: validate URL
+            validate_string('"project"', source['project']),
+            validate_string('"revision"', source['revision']),
+            validate_string('"path"', source['path']),
+        )
+
+    def start_download(self, session, chunk_size, offset, size, sha256):
+        headers = self.http_range_headers(offset)
+
+        git_token = os.environ.get('GIT_TOKEN')
+        if git_token is not None:
+            headers['Private-Token'] = git_token
+
+        url = self.api_root + 'projects/{}/repository/files/{}/raw'.format(
+            urllib.parse.quote(self.project, safe=''),
+            urllib.parse.quote(self.path, safe=''))
+
+        response = session.get(url, params={'ref': self.revision},
+            headers=headers, timeout=DOWNLOAD_TIMEOUT)
+        response.raise_for_status()
+
+        return self.handle_http_response(response, chunk_size)
+
+FileSource.types['gitlab'] = FileSourceGitlab
 
 class ModelFile:
     def __init__(self, name, size, sha256, source):

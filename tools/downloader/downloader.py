@@ -69,7 +69,7 @@ def process_download(reporter, chunk_iterable, size, progress, file):
     finally:
         reporter.end_progress()
 
-def try_download(reporter, file, num_attempts, start_download, size):
+def try_download(reporter, file, num_attempts, start_download, size, sha256):
     progress = types.SimpleNamespace(size=0)
 
     for attempt in range(num_attempts):
@@ -80,7 +80,7 @@ def try_download(reporter, file, num_attempts, start_download, size):
 
         try:
             reporter.job_context.check_interrupted()
-            chunk_iterable, continue_offset = start_download(offset=progress.size)
+            chunk_iterable, continue_offset = start_download(offset=progress.size, size=size, sha256=sha256)
 
             if continue_offset not in {0, progress.size}:
                 # Somehow we neither restarted nor continued from where we left off.
@@ -195,7 +195,7 @@ def try_retrieve(reporter, destination, model_file, cache, num_attempts, start_d
     success = False
 
     with destination.open('w+b') as f:
-        actual_hash = try_download(reporter, f, num_attempts, start_download, model_file.size)
+        actual_hash = try_download(reporter, f, num_attempts, start_download, model_file.size, model_file.sha256)
 
     if actual_hash and verify_hash(reporter, actual_hash, model_file.sha256, destination):
         try_update_cache(reporter, cache, model_file.sha256, destination)
