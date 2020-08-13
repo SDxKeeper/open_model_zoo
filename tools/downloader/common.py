@@ -315,9 +315,14 @@ class FileSourceHttp(FileSource):
 
         return response.iter_content(chunk_size=chunk_size), 0
 
+    def __str__(self):
+        return str(self.url)
+
 FileSource.types['http'] = FileSourceHttp
 
 class FileSourceGoogleDrive(FileSource):
+    URL = 'https://docs.google.com/uc?export=download'
+
     def __init__(self, id):
         self.id = id
 
@@ -327,17 +332,19 @@ class FileSourceGoogleDrive(FileSource):
 
     def start_download(self, session, chunk_size, offset):
         # for now the offset is ignored; TODO: try to implement resumption
-        URL = 'https://docs.google.com/uc?export=download'
         response = session.get(URL, params={'id' : self.id}, stream=True, timeout=DOWNLOAD_TIMEOUT)
         response.raise_for_status()
 
         for key, value in response.cookies.items():
             if key.startswith('download_warning'):
                 params = {'id': self.id, 'confirm': value}
-                response = session.get(URL, params=params, stream=True, timeout=DOWNLOAD_TIMEOUT)
+                response = session.get(self.URL, params=params, stream=True, timeout=DOWNLOAD_TIMEOUT)
                 response.raise_for_status()
 
         return response.iter_content(chunk_size=chunk_size), 0
+
+    def __str__(self):
+        return str(self.URL + '&id=%s' % self.id)
 
 FileSource.types['google_drive'] = FileSourceGoogleDrive
 

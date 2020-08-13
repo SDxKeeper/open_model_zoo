@@ -1,1 +1,7 @@
 *.pyc
+.env3
+build
+dist
+*.egg-info
+*/downloader/public/*
+*/downloader/intel/*
