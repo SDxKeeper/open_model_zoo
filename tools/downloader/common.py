@@ -687,6 +687,7 @@ def load_models(args):
     models = []
     model_names = set()
 
+    # TODO Add loading json from URL
     # TODO Find better place for logic
     if args.models_json:
         if not args.models_json.exists():

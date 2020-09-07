@@ -25,7 +25,6 @@ import common
 def to_info(model):
     return {
         'name': model.name,
-
         'description': model.description,
         'framework': model.framework,
         'license_url': model.license_url,
