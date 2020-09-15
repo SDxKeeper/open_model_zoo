@@ -47,7 +47,7 @@ def to_info(model):
             {
                 'name': str(modelfile.name),
                 'sha256': modelfile.sha256,
-                'source': str(modelfile.source)
+                'source': {'url': str(modelfile.source), '$type': 'http'}
             })
     model_info = {
         'name': model.name,
