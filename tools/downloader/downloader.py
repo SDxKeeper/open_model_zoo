@@ -294,6 +294,8 @@ def main():
         help='how many downloads to perform concurrently')
     parser.add_argument('--models-json', type=Path, metavar="MODELS.JSON",
         help='path to json file with serialized models information')
+    parser.add_argument('--onezoo-address', type=str, default="http://onezoo-staging.intel.com",
+        help='URL to model registry REST API')
 
     args = parser.parse_args()
 

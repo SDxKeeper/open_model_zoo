@@ -683,6 +683,19 @@ class Model:
             return cls(name, subdirectory, files, postprocessing, mo_args, quantizable, framework,
                 description, license_url, precisions, task_type, conversion_to_onnx_args)
 
+# Temporary
+def remove_keys_with_empty_values(d: dict) -> dict:
+    output_dict = {}
+    for key, value in d.items():
+        if value is not None:
+            if isinstance(value, dict):
+                subdict = remove_keys_with_empty_values(value)
+                output_dict[key] = subdict
+            else:
+                output_dict[key] = value
+    return output_dict
+
+
 def load_models(args):
     models = []
     model_names = set()
@@ -696,6 +709,39 @@ def load_models(args):
             serialized_models = json.load(json_file)
         for model in serialized_models:
             models.append(Model.deserialize(model, model["model_id"], model["subdirectory"]))
+    elif args.onezoo_address:
+        import onezoo
+        from onezoo.configuration import Configuration
+        configuration = Configuration()
+        configuration.host = args.onezoo_address
+        configuration.debug = False
+        models_api = onezoo.ModelsApi(onezoo.ApiClient(configuration))
+
+        # TODO Handle config file filters and make list query otherwise
+        # Downloader Logic will need to be changed in order to provide
+        # Only list capability without knowning all details about models (or completely remove from downloader)
+
+        # Testing with HTTP model from same open_model_zoo
+        test_model_id = "gmcnn-places2-fw_tf-fmt_protobuf-input_1x512x680x3_1x512x680x1"
+        test_model_version = "2"
+        model_info = models_api.get_model_api(test_model_id, version=test_model_version)
+
+        model_dict = model_info.to_dict()
+        # FIXME type handling
+        for fileentry in model_dict["files"]:
+            fileentry["source"]["$type"] = fileentry["source"]["type"]
+
+        model_dict = remove_keys_with_empty_values(model_dict)
+
+        # FIXME improve handling of task type in model downloader? switch to list?
+        if isinstance(model_dict['task_type'], list):
+            if len(model_dict['task_type']) == 1:
+                model_dict['task_type'] = model_dict['task_type'][0]
+
+        #print(json.dumps(model_dict, sort_keys=True, indent=2))
+        models.append(Model.deserialize(model_dict, model_dict["model_id"], model_dict["subdirectory"]))
+        # TODO test it by comparison with deserialized model from xml file.
+
     else:
         for config_path in sorted(MODEL_ROOT.glob('**/model.yml')):
             subdirectory = config_path.parent.relative_to(MODEL_ROOT)
@@ -755,6 +801,11 @@ def load_models_from_args(parser, args):
             patterns = []
             with args.list.open() as list_file:
                 for list_line in list_file:
+                    # TODO Implement here version extraction
+                    # For OneZoo use case we need to reverse logic here:
+                    # 1. Read model ids and versions from list file
+                    # 2. Request from model registry server information about models
+                    # 3. Deserialize resulting list into models
                     tokens = shlex.split(list_line, comments=True)
                     if not tokens: continue
 
