@@ -638,36 +638,35 @@ class Model:
 
             mo_args = None
             precisions = {'FP16', 'FP32'}
-            # FIXME model_optimizer_args should be mandatory for OneZoo or optional here?
-            # if 'model_optimizer_args' in model:
-            #     mo_args = [validate_string('"model_optimizer_args" #{}'.format(i), arg)
-            #         for i, arg in enumerate(model['model_optimizer_args'])]
+            if 'model_optimizer_args' in model:
+                mo_args = [validate_string('"model_optimizer_args" #{}'.format(i), arg)
+                    for i, arg in enumerate(model['model_optimizer_args'])]
 
-            #     precisions = {'FP16', 'FP32'}
-            # else:
-            #     if framework != 'dldt':
-            #         raise DeserializationError('Model not in IR format, but no conversions defined')
+                precisions = {'FP16', 'FP32'}
+            else:
+                if framework != 'dldt':
+                    raise DeserializationError('Model not in IR format, but no conversions defined')
 
-            #     mo_args = None
+                mo_args = None
             # FIXME: Precision handling in OneZoo. Currently no enforced rules
-            #     files_per_precision = {}
+                files_per_precision = {}
 
-            #     for file in files:
-            #         if len(file.name.parts) != 2:
-            #             raise DeserializationError('Can\'t derive precision from file name {!r}'.format(file.name))
-            #         p = file.name.parts[0]
-            #         if p not in KNOWN_PRECISIONS:
-            #             raise DeserializationError(
-            #                 'Unknown precision {!r} derived from file name {!r}, expected one of {!r}'.format(
-            #                     p, file.name, KNOWN_PRECISIONS))
-            #         files_per_precision.setdefault(p, set()).add(file.name.parts[1])
+                for file in files:
+                    if len(file.name.parts) != 2:
+                        raise DeserializationError('Can\'t derive precision from file name {!r}'.format(file.name))
+                    p = file.name.parts[0]
+                    if p not in KNOWN_PRECISIONS:
+                        raise DeserializationError(
+                            'Unknown precision {!r} derived from file name {!r}, expected one of {!r}'.format(
+                                p, file.name, KNOWN_PRECISIONS))
+                    files_per_precision.setdefault(p, set()).add(file.name.parts[1])
 
-            #     for precision, precision_files in files_per_precision.items():
-            #         for ext in ['xml', 'bin']:
-            #             if (name + '.' + ext) not in precision_files:
-            #                 raise DeserializationError('No {} file for precision "{}"'.format(ext.upper(), precision))
+                for precision, precision_files in files_per_precision.items():
+                    for ext in ['xml', 'bin']:
+                        if (name + '.' + ext) not in precision_files:
+                            raise DeserializationError('No {} file for precision "{}"'.format(ext.upper(), precision))
 
-            #     precisions = set(files_per_precision.keys())
+                precisions = set(files_per_precision.keys())
 
             quantizable = model.get('quantizable', False)
             if not isinstance(quantizable, bool):
@@ -722,8 +721,12 @@ def load_models(args):
         # Only list capability without knowning all details about models (or completely remove from downloader)
 
         # Testing with HTTP model from same open_model_zoo
-        test_model_id = "gmcnn-places2-fw_tf-fmt_protobuf-input_1x512x680x3_1x512x680x1"
-        test_model_version = "2"
+
+        #./downloader.py --onezoo --modelid=action-recognition-0001-decoder-fw_dldt-fmt_IR-input_unknown --version=3
+        # test_model_id = "gmcnn-places2-fw_tf-fmt_protobuf-input_1x512x680x3_1x512x680x1"
+        # test_model_version = "2"
+        test_model_id = "action-recognition-0001-decoder-fw_dldt-fmt_IR-input_unknown"
+        test_model_version = "3"
         model_info = models_api.get_model_api(test_model_id, version=test_model_version)
 
         model_dict = model_info.to_dict()
@@ -738,7 +741,7 @@ def load_models(args):
             if len(model_dict['task_type']) == 1:
                 model_dict['task_type'] = model_dict['task_type'][0]
 
-        #print(json.dumps(model_dict, sort_keys=True, indent=2))
+        print(json.dumps(model_dict, sort_keys=True, indent=2))
         models.append(Model.deserialize(model_dict, model_dict["model_id"], model_dict["subdirectory"]))
         # TODO test it by comparison with deserialized model from xml file.
 

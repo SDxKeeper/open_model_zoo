@@ -296,6 +296,7 @@ def main():
         help='path to json file with serialized models information')
     parser.add_argument('--onezoo-address', type=str, default="http://onezoo-staging.intel.com",
         help='URL to model registry REST API')
+        # TODO Add use-registry Bool
 
     args = parser.parse_args()
 
