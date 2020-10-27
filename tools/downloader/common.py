@@ -725,9 +725,9 @@ def load_models(args):
         #./downloader.py --onezoo --modelid=action-recognition-0001-decoder-fw_dldt-fmt_IR-input_unknown --version=3
         # test_model_id = "gmcnn-places2-fw_tf-fmt_protobuf-input_1x512x680x3_1x512x680x1"
         # test_model_version = "2"
-        test_model_id = "action-recognition-0001-decoder-fw_dldt-fmt_IR-input_unknown"
-        test_model_version = "3"
-        model_info = models_api.get_model_api(test_model_id, version=test_model_version)
+        test_model_id = "brain-tumor-segmentation-0001-fw_mxnet-fmt_mxnet-input_1x4x128x128x128"
+        test_model_version = "12"
+        model_info = models_api.get_model_info(test_model_id, version=test_model_version)
 
         model_dict = model_info.to_dict()
         # FIXME type handling
