@@ -294,9 +294,14 @@ def main():
         help='how many downloads to perform concurrently')
     parser.add_argument('--models-json', type=Path, metavar="MODELS.JSON",
         help='path to json file with serialized models information')
+    parser.add_argument('--onezoo', action='store_true', default=False,
+        help='Switch downloader to load information from OneZoo instead of local models')
     parser.add_argument('--onezoo-address', type=str, default="http://onezoo-staging.intel.com",
         help='URL to model registry REST API')
-        # TODO Add use-registry Bool
+    parser.add_argument('--model_id', metavar='MODEL_ID',
+        help='download only model with matching model_id')
+    parser.add_argument('--version', metavar='VERSION',
+        help='download specific version of the model with specified model_id')
 
     args = parser.parse_args()
 

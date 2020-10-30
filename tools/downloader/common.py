@@ -644,29 +644,30 @@ class Model:
 
                 precisions = {'FP16', 'FP32'}
             else:
-                if framework != 'dldt':
-                    raise DeserializationError('Model not in IR format, but no conversions defined')
+            # FIXME: Index model_optimizer_args always from gitlab source
+            #    if framework != 'dldt':
+            #        raise DeserializationError('Model not in IR format, but no conversions defined')
 
                 mo_args = None
             # FIXME: Precision handling in OneZoo. Currently no enforced rules
                 files_per_precision = {}
 
-                for file in files:
-                    if len(file.name.parts) != 2:
-                        raise DeserializationError('Can\'t derive precision from file name {!r}'.format(file.name))
-                    p = file.name.parts[0]
-                    if p not in KNOWN_PRECISIONS:
-                        raise DeserializationError(
-                            'Unknown precision {!r} derived from file name {!r}, expected one of {!r}'.format(
-                                p, file.name, KNOWN_PRECISIONS))
-                    files_per_precision.setdefault(p, set()).add(file.name.parts[1])
+                # for file in files:
+                #     if len(file.name.parts) != 2:
+                #         raise DeserializationError('Can\'t derive precision from file name {!r}'.format(file.name))
+                #     p = file.name.parts[0]
+                #     if p not in KNOWN_PRECISIONS:
+                #         raise DeserializationError(
+                #             'Unknown precision {!r} derived from file name {!r}, expected one of {!r}'.format(
+                #                 p, file.name, KNOWN_PRECISIONS))
+                #     files_per_precision.setdefault(p, set()).add(file.name.parts[1])
 
-                for precision, precision_files in files_per_precision.items():
-                    for ext in ['xml', 'bin']:
-                        if (name + '.' + ext) not in precision_files:
-                            raise DeserializationError('No {} file for precision "{}"'.format(ext.upper(), precision))
+                # for precision, precision_files in files_per_precision.items():
+                #     for ext in ['xml', 'bin']:
+                #         if (name + '.' + ext) not in precision_files:
+                #             raise DeserializationError('No {} file for precision "{}"'.format(ext.upper(), precision))
 
-                precisions = set(files_per_precision.keys())
+                # precisions = set(files_per_precision.keys())
 
             quantizable = model.get('quantizable', False)
             if not isinstance(quantizable, bool):
@@ -708,43 +709,6 @@ def load_models(args):
             serialized_models = json.load(json_file)
         for model in serialized_models:
             models.append(Model.deserialize(model, model["model_id"], model["subdirectory"]))
-    elif args.onezoo_address:
-        import onezoo
-        from onezoo.configuration import Configuration
-        configuration = Configuration()
-        configuration.host = args.onezoo_address
-        configuration.debug = False
-        models_api = onezoo.ModelsApi(onezoo.ApiClient(configuration))
-
-        # TODO Handle config file filters and make list query otherwise
-        # Downloader Logic will need to be changed in order to provide
-        # Only list capability without knowning all details about models (or completely remove from downloader)
-
-        # Testing with HTTP model from same open_model_zoo
-
-        #./downloader.py --onezoo --modelid=action-recognition-0001-decoder-fw_dldt-fmt_IR-input_unknown --version=3
-        # test_model_id = "gmcnn-places2-fw_tf-fmt_protobuf-input_1x512x680x3_1x512x680x1"
-        # test_model_version = "2"
-        test_model_id = "brain-tumor-segmentation-0001-fw_mxnet-fmt_mxnet-input_1x4x128x128x128"
-        test_model_version = "12"
-        model_info = models_api.get_model_info(test_model_id, version=test_model_version)
-
-        model_dict = model_info.to_dict()
-        # FIXME type handling
-        for fileentry in model_dict["files"]:
-            fileentry["source"]["$type"] = fileentry["source"]["type"]
-
-        model_dict = remove_keys_with_empty_values(model_dict)
-
-        # FIXME improve handling of task type in model downloader? switch to list?
-        if isinstance(model_dict['task_type'], list):
-            if len(model_dict['task_type']) == 1:
-                model_dict['task_type'] = model_dict['task_type'][0]
-
-        print(json.dumps(model_dict, sort_keys=True, indent=2))
-        models.append(Model.deserialize(model_dict, model_dict["model_id"], model_dict["subdirectory"]))
-        # TODO test it by comparison with deserialized model from xml file.
-
     else:
         for config_path in sorted(MODEL_ROOT.glob('**/model.yml')):
             subdirectory = config_path.parent.relative_to(MODEL_ROOT)
@@ -778,6 +742,7 @@ def load_models_or_die(args):
         print(indent * len(e.contexts) + e.problem, file=sys.stderr)
         sys.exit(1)
 
+
 # requires the --print_all, --all, --name and --list arguments to be in `args`
 def load_models_from_args(parser, args):
     if args.print_all:
@@ -785,7 +750,7 @@ def load_models_from_args(parser, args):
             print(model.name)
         sys.exit()
 
-    filter_args_count = sum([args.all, args.name is not None, args.list is not None])
+    filter_args_count = sum([args.all, args.name is not None, args.list is not None, args.model_id is not None])
 
     if filter_args_count > 1:
         parser.error('at most one of "--all", "--name" or "--list" can be specified')
@@ -793,42 +758,101 @@ def load_models_from_args(parser, args):
     if filter_args_count == 0:
         parser.error('one of "--print_all", "--all", "--name" or "--list" must be specified')
 
-    all_models = load_models_or_die(args)
+    if not args.onezoo:
+        all_models = load_models_or_die(args)
 
-    if args.all:
-        return all_models
-    elif args.name is not None or args.list is not None:
-        if args.name is not None:
-            patterns = args.name.split(',')
+        if args.all:
+            return all_models
+        elif args.name is not None or args.list is not None:
+            if args.name is not None:
+                patterns = args.name.split(',')
+            else:
+                patterns = []
+                with args.list.open() as list_file:
+                    for list_line in list_file:
+                        tokens = shlex.split(list_line, comments=True)
+
+                        if not tokens: continue
+
+                        patterns.append(tokens[0])
+                        # For now, ignore any other tokens in the line.
+                        # We might use them as additional parameters later.
+
+            models = collections.OrderedDict() # deduplicate models while preserving order
+
+            for pattern in patterns:
+                matching_models = [model for model in all_models
+                    if fnmatch.fnmatchcase(model.name, pattern)]
+
+                if not matching_models:
+                    sys.exit('No matching models: "{}"'.format(pattern))
+
+                for model in matching_models:
+                    models[model.name] = model
+
+            return list(models.values())
+    else:
+        # TODO Implement here version extraction
+        # For OneZoo use case we need to reverse logic here:
+        # 1. Read model ids and versions from list file
+        # 2. Request from model registry server information about models
+        # 3. Deserialize resulting list into models
+        requested_model_ids = []
+        if args.model_id is not None or args.list is not None:
+            if args.model_id is not None:
+                requested_model_ids.append((args.model_id, args.version))
+            else:
+                # list case
+                requested_model_ids = []
+                with args.list.open() as list_file:
+                    for list_line in list_file:
+                        tokens = shlex.split(list_line, comments=True)
+                        line_params = {"model_id": tokens[0]}
+                        for token in tokens[1:]:
+                            key, value = token.split("=", maxsplit=1)
+                            line_params[key] = value
+                        requested_model_ids.append((line_params["model_id"], line_params.get("version", None)))
+
         else:
-            patterns = []
-            with args.list.open() as list_file:
-                for list_line in list_file:
-                    # TODO Implement here version extraction
-                    # For OneZoo use case we need to reverse logic here:
-                    # 1. Read model ids and versions from list file
-                    # 2. Request from model registry server information about models
-                    # 3. Deserialize resulting list into models
-                    tokens = shlex.split(list_line, comments=True)
-                    if not tokens: continue
+            sys.exit('Specify model_id or list arguments')
 
-                    patterns.append(tokens[0])
-                    # For now, ignore any other tokens in the line.
-                    # We might use them as additional parameters later.
+        if len(requested_model_ids) == 0:
+            sys.exit('Nothing to download')
 
-        models = collections.OrderedDict() # deduplicate models while preserving order
+        if args.onezoo_address:
+            models = []
+            import onezoo
+            from onezoo.configuration import Configuration
+            configuration = Configuration()
+            configuration.host = args.onezoo_address
+            configuration.debug = False
+            models_api = onezoo.ModelsApi(onezoo.ApiClient(configuration))
 
-        for pattern in patterns:
-            matching_models = [model for model in all_models
-                if fnmatch.fnmatchcase(model.name, pattern)]
+            for model_id, version in requested_model_ids:
+                if version:
+                    model_info = models_api.get_model_info(model_id, version=version)
+                else:
+                    model_info = models_api.get_model_info(model_id)
 
-            if not matching_models:
-                sys.exit('No matching models: "{}"'.format(pattern))
+                model_dict = model_info.to_dict()
+                # FIXME type handling
+                for fileentry in model_dict["files"]:
+                    fileentry["source"]["$type"] = fileentry["source"]["type"]
 
-            for model in matching_models:
-                models[model.name] = model
+                model_dict = remove_keys_with_empty_values(model_dict)
 
-        return list(models.values())
+                # FIXME improve handling of task type in model downloader? switch to list?
+                if isinstance(model_dict['task_type'], list):
+                    if len(model_dict['task_type']) == 1:
+                        model_dict['task_type'] = model_dict['task_type'][0]
+
+                #print(json.dumps(model_dict, sort_keys=True, indent=2))
+                models.append(Model.deserialize(model_dict, model_dict["model_id"], model_dict["subdirectory"]))
+                # TODO test it by comparison with deserialized model from xml file.
+            return models
+        else:
+            sys.exit('OneZoo address is not specified')
+
 
 def quote_arg_windows(arg):
     if not arg: return '""'
