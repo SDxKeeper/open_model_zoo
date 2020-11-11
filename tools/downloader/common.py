@@ -595,7 +595,7 @@ class Model:
         self.precisions = precisions
         self.task_type = task_type
         self.conversion_to_onnx_args = conversion_to_onnx_args
-        self.converter_to_onnx = KNOWN_FRAMEWORKS[framework]
+        self.converter_to_onnx = KNOWN_FRAMEWORKS.get(framework, None)
 
     @classmethod
     def deserialize(cls, model, name, subdirectory):
@@ -621,7 +621,8 @@ class Model:
                     postprocessing.append(Postproc.deserialize(postproc))
 
             model_framework = model['framework'].get('name', model['framework'])
-            framework = validate_string_enum('"framework"', model_framework, KNOWN_FRAMEWORKS.keys())
+            # FIXME Add warning
+            framework = model_framework #validate_string_enum('"framework"', model_framework, KNOWN_FRAMEWORKS.keys())
 
             conversion_to_onnx_args = model.get('conversion_to_onnx_args', None)
             # FIXME:  conversion_to_onnx_args in OneZoo?
@@ -673,12 +674,17 @@ class Model:
             if not isinstance(quantizable, bool):
                 raise DeserializationError('"quantizable": expected a boolean, got {!r}'.format(quantizable))
 
-            description = validate_string('"description"', model['description'])
+            if 'description' in model:
+                description = validate_string('"description"', model['description'])
+            else:
+                description = ""
 
             license_url = None
             #license_url = validate_string('"license"', model['license'])
 
-            task_type = validate_string_enum('"task_type"', model['task_type'], KNOWN_TASK_TYPES)
+            #task_type = validate_string_enum('"task_type"', model['task_type'], KNOWN_TASK_TYPES)
+            # FIXME make it warning
+            task_type = model['task_type']
 
             return cls(name, subdirectory, files, postprocessing, mo_args, quantizable, framework,
                 description, license_url, precisions, task_type, conversion_to_onnx_args)
