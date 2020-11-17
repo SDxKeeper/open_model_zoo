@@ -27,7 +27,7 @@ from pathlib import Path
 
 import yaml
 
-import common
+from . import common
 
 DEFAULT_POT_CONFIG_BASE = {
     'compression': {

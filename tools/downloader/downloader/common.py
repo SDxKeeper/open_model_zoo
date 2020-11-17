@@ -36,7 +36,7 @@ import yaml
 import os
 
 DOWNLOAD_TIMEOUT = 5 * 60
-MODEL_ROOT = Path(__file__).resolve().parents[2] / 'models'
+MODEL_ROOT = Path(__file__).resolve().parents[3] / 'models'
 
 # make sure to update the documentation if you modify these
 KNOWN_FRAMEWORKS = {
@@ -619,10 +619,13 @@ class Model:
             for i, postproc in enumerate(model.get('postprocessing', [])):
                 with deserialization_context('"postprocessing" #{}'.format(i)):
                     postprocessing.append(Postproc.deserialize(postproc))
-
-            model_framework = model['framework'].get('name', model['framework'])
-            # FIXME Add warning
-            framework = model_framework #validate_string_enum('"framework"', model_framework, KNOWN_FRAMEWORKS.keys())
+            if type(model['framework']) is str:
+                model_framework = model['framework']
+                framework = validate_string_enum('"framework"', model_framework, KNOWN_FRAMEWORKS.keys())
+            else:
+                model_framework = model['framework'].get('name', model['framework'])
+                # FIXME Add warning
+                framework = model_framework #validate_string_enum('"framework"', model_framework, KNOWN_FRAMEWORKS.keys())
 
             conversion_to_onnx_args = model.get('conversion_to_onnx_args', None)
             # FIXME:  conversion_to_onnx_args in OneZoo?

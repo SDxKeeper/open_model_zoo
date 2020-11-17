@@ -22,7 +22,7 @@ import sys
 
 from pathlib import Path
 
-import common
+from . import common
 
 
 def convert_to_onnx(reporter, model, output_dir, args):

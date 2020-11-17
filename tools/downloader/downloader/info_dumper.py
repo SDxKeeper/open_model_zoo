@@ -20,7 +20,7 @@ import sys
 
 from pathlib import Path
 
-import common
+from . import common
 
 def to_info(model):
     return {
