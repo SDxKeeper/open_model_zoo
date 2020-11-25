@@ -27,7 +27,7 @@ setup(
     keywords=["Open", "Model", "Zoo"],
     install_requires=REQUIRES,
     packages=find_packages(),
-    python_requires='>=3.5',
+    python_requires='>=3.6',
     include_package_data=True,
     entry_points={
         'console_scripts': [
