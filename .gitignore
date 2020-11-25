@@ -1,2 +1,5 @@
 *.pyc
 .venv
+/tools/downloader/build
+/tools/downloader/dist
+**/*.egg-info
