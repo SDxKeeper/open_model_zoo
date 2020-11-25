@@ -8,7 +8,7 @@
 from setuptools import setup, find_packages  # noqa: H301
 
 NAME = "open_model_zoo-py"
-VERSION = "0.0.9"
+VERSION = "0.0.10"
 # To install the library, run the following
 #
 # python setup.py install
@@ -31,7 +31,7 @@ setup(
     include_package_data=True,
     entry_points={
         'console_scripts': [
-            'onezoo_download=downloader.downloader:main',
+            'onezoo_download=omz_tools.downloader:main',
         ],
     },
     long_description="""\
