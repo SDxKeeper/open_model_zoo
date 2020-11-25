@@ -270,7 +270,7 @@ class ThreadSessionFactory:
         return session
 
 
-def main(argv):
+def main(argv=sys.argv[1:]):
     parser = DownloaderArgumentParser()
     parser.add_argument('--name', metavar='PAT[,PAT...]',
         help='download only models whose names match at least one of the specified patterns')
@@ -359,4 +359,4 @@ def main(argv):
         sys.exit(1)
 
 if __name__ == '__main__':
-    main(sys.argv[1:])
+    main()
