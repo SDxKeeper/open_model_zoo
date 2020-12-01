@@ -749,23 +749,25 @@ def load_models_or_die(args):
         for i, context in enumerate(e.contexts):
             print(indent * i + context + ':', file=sys.stderr)
         print(indent * len(e.contexts) + e.problem, file=sys.stderr)
-        sys.exit(1)
+        # TODO print to string and raise it
+        raise ValueError(e)
 
 
 # requires the --print_all, --all, --name and --list arguments to be in `args`
-def load_models_from_args(parser, args):
+def load_models_from_args(args):
     if args.print_all:
         for model in load_models_or_die(args):
             print(model.name)
+        # TODO Fix this exit
         sys.exit()
 
     filter_args_count = sum([args.all, args.name is not None, args.list is not None, args.model_id is not None])
 
     if filter_args_count > 1:
-        parser.error('at most one of "--all", "--name" or "--list" can be specified')
+        raise ValueError('at most one of "--all", "--name" or "--list" can be specified')
 
     if filter_args_count == 0:
-        parser.error('one of "--print_all", "--all", "--name" or "--list" must be specified')
+        raise ValueError('one of "--print_all", "--all", "--name" or "--list" must be specified')
 
     if not args.onezoo:
         all_models = load_models_or_die(args)
@@ -794,7 +796,7 @@ def load_models_from_args(parser, args):
                     if fnmatch.fnmatchcase(model.name, pattern)]
 
                 if not matching_models:
-                    sys.exit('No matching models: "{}"'.format(pattern))
+                    raise ValueError('No matching models: "{}"'.format(pattern))
 
                 for model in matching_models:
                     models[model.name] = model
@@ -823,10 +825,10 @@ def load_models_from_args(parser, args):
                         requested_model_ids.append((line_params["model_id"], line_params.get("version", None)))
 
         else:
-            sys.exit('Specify model_id or list arguments')
+            raise ValueError('Specify model_id or list arguments')
 
         if len(requested_model_ids) == 0:
-            sys.exit('Nothing to download')
+            raise ValueError('Nothing to download')
 
         if args.onezoo_address:
             models = []
@@ -860,7 +862,7 @@ def load_models_from_args(parser, args):
                 # TODO test it by comparison with deserialized model from xml file.
             return models
         else:
-            sys.exit('OneZoo address is not specified')
+            raise ValueError('OneZoo address is not specified')
 
 
 def quote_arg_windows(arg):

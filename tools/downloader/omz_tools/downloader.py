@@ -235,22 +235,6 @@ def download_model(reporter, args, cache, session_factory, requested_precisions,
     return True
 
 
-class DownloaderArgumentParser(argparse.ArgumentParser):
-    def error(self, message):
-        sys.stderr.write('error: %s\n' % message)
-        self.print_help()
-        sys.exit(2)
-
-def positive_int_arg(value_str):
-    try:
-        value = int(value_str)
-        if value > 0: return value
-    except ValueError:
-        pass
-
-    raise argparse.ArgumentTypeError('must be a positive integer (got {!r})'.format(value_str))
-
-
 # There is no evidence that the requests.Session class is thread-safe,
 # so for safety, we use one Session per thread. This class ensures that
 # each thread gets its own Session.
@@ -269,8 +253,30 @@ class ThreadSessionFactory:
             self._thread_local.session = session
         return session
 
+def make_reporter(context, progress_format):
+    return common.Reporter(context,
+        enable_human_output=progress_format == 'text',
+        enable_json_output=progress_format == 'json')
 
-def main(argv=sys.argv[1:]):
+class DownloaderException(Exception):
+    """Base downloader exception"""
+
+class DownloaderArgumentParser(argparse.ArgumentParser):
+    def error(self, message):
+        sys.stderr.write('error: %s\n' % message)
+        self.print_help()
+        sys.exit(2)
+
+def positive_int_arg(value_str):
+    try:
+        value = int(value_str)
+        if value > 0: return value
+    except ValueError:
+        pass
+
+    raise argparse.ArgumentTypeError('must be a positive integer (got {!r})'.format(value_str))
+
+def get_argument_parser():
     parser = DownloaderArgumentParser()
     parser.add_argument('--name', metavar='PAT[,PAT...]',
         help='download only models whose names match at least one of the specified patterns')
@@ -303,17 +309,55 @@ def main(argv=sys.argv[1:]):
     parser.add_argument('--version', metavar='VERSION',
         help='download specific version of the model with specified model_id')
 
-    args = parser.parse_args(argv)
+    return parser
 
-    def make_reporter(context):
-        return common.Reporter(context,
-            enable_human_output=args.progress_format == 'text',
-            enable_json_output=args.progress_format == 'json')
+# OneZoo specific software interface wrappers
+def download(name = None,
+            list: Path = None,
+            all = False,
+            print_all = False,
+            model_id = None,
+            version = None,
+            onezoo_address="http://onezoo-staging.intel.com",
+            precisions = None,
+            output_dir: Path = Path.cwd(),
+            cache_dir: Path = None,
+            num_attempts: int =1,
+            jobs: int =1,
+            progress_format='text',
+            models_json: Path = None,
+            onezoo: bool = False):
+    class ArgHolder(object):
+        pass
 
-    reporter = make_reporter(common.DirectOutputContext())
+    args = ArgHolder()
+    args.name = name
+    args.list = list
+    args.all = all
+    args.print_all = print_all
+    args.model_id = model_id
+    args.version = version
+    args.onezoo_address = onezoo_address
+    args.precisions = precisions
+    args.output_dir = output_dir
+    args.cache_dir = cache_dir
+    args.num_attempts = num_attempts
+    args.jobs = jobs
+    args.progress_format = progress_format
+    args.models_json = models_json
+    args.onezoo = onezoo
+
+    progress_types = ['text', 'json']
+    if args.progress_format not in progress_types:
+        raise ValueError("Invalid progress_format. Expected one of: %s" % progress_types)
+
+    main_body(args)
+
+def main_body(args):
+    reporter = make_reporter(common.DirectOutputContext(), args.progress_format)
 
     cache = NullCache() if args.cache_dir is None else DirCache(args.cache_dir)
-    models = common.load_models_from_args(parser, args)
+    models = common.load_models_from_args(args)
 
     failed_models = set()
 
@@ -323,7 +367,7 @@ def main(argv=sys.argv[1:]):
         requested_precisions = set(args.precisions.split(','))
         unknown_precisions = requested_precisions - common.KNOWN_PRECISIONS
         if unknown_precisions:
-            sys.exit('Unknown precisions specified: {}.'.format(', '.join(sorted(unknown_precisions))))
+            raise ValueError('Unknown precisions specified: {}.'.format(', '.join(sorted(unknown_precisions))))
 
     reporter.print_group_heading('Downloading models')
     with contextlib.ExitStack() as exit_stack:
@@ -334,7 +378,7 @@ def main(argv=sys.argv[1:]):
         else:
             results = common.run_in_parallel(args.jobs,
                 lambda context, model: download_model(
-                    make_reporter(context), args, cache, session_factory, requested_precisions, model),
+                    make_reporter(context, args.progress_format), args, cache, session_factory, requested_precisions, model),
                 models)
 
     failed_models = {model.name for model, successful in zip(models, results) if not successful}
@@ -356,6 +400,21 @@ def main(argv=sys.argv[1:]):
         reporter.print('FAILED:')
         for failed_model_name in failed_models:
             reporter.print(failed_model_name)
+        raise DownloaderException("Not all models were downloaded")
+
+# Duplicate code for entrypoint from package
+# TODO Find out if we can combine source dist and binary dist
+def main(argv=sys.argv[1:]):
+    parser = get_argument_parser()
+    args = parser.parse_args(argv)
+
+    try:
+        main_body(args)
+    except ValueError as err:
+        print("Error happened during download process: ", err)
+        sys.exit(2)
+    except DownloaderException as err:
+        print("Error happened during download process: ", err)
         sys.exit(1)
 
 if __name__ == '__main__':
