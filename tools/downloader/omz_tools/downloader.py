@@ -339,12 +339,12 @@ def download(name = None,
     args.version = version
     args.onezoo_address = onezoo_address
     args.precisions = precisions
-    args.output_dir = output_dir
-    args.cache_dir = cache_dir
+    args.output_dir = Path(output_dir)
+    args.cache_dir = Path(cache_dir) if cache_dir else None
     args.num_attempts = num_attempts
     args.jobs = jobs
     args.progress_format = progress_format
-    args.models_json = models_json
+    args.models_json = Path(models_json) if models_json else None
     args.onezoo = onezoo
 
     progress_types = ['text', 'json']
