@@ -311,6 +311,8 @@ def get_argument_parser():
 
     return parser
 
+# TODO Add docstring comments
+# Can be split into multiple single purpose methods
 # OneZoo specific software interface wrappers
 def download(name = None,
             list: Path = None,
