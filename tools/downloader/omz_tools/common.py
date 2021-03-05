@@ -846,10 +846,6 @@ def load_models_from_args(args):
                     model_info = models_api.get_model_info(model_id)
 
                 model_dict = model_info.to_dict()
-                # FIXME type handling
-                for fileentry in model_dict["files"]:
-                    fileentry["source"]["$type"] = fileentry["source"]["type"]
-
                 model_dict = remove_keys_with_empty_values(model_dict)
 
                 # FIXME improve handling of task type in model downloader? switch to list?
