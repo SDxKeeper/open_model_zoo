@@ -607,6 +607,8 @@ class Model:
             file_names = set()
 
             for file in model['files']:
+                if file.get('postprocessed', False): # OneZoo tracks SHA256 for all files
+                    continue
                 files.append(ModelFile.deserialize(file))
 
                 if files[-1].name in file_names:
