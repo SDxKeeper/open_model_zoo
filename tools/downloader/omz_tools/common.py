@@ -847,7 +847,7 @@ def load_models_from_args(args):
                 else:
                     model_info = models_api.get_model_info(model_id)
 
-                model_dict = model_info.to_dict()
+                model_dict = model_info.to_dict(serialize=True)
                 model_dict = remove_keys_with_empty_values(model_dict)
 
                 # FIXME improve handling of task type in model downloader? switch to list?

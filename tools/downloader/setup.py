@@ -8,7 +8,7 @@
 from setuptools import setup, find_packages  # noqa: H301
 
 NAME = "open_model_zoo-py"
-VERSION = "0.0.14"
+VERSION = "0.0.15"
 # To install the library, run the following
 #
 # python setup.py install
@@ -16,7 +16,7 @@ VERSION = "0.0.14"
 # prerequisite: setuptools
 # http://pypi.python.org/pypi/setuptools
 
-REQUIRES = ["pyyaml","requests", "onezoo-py>=1.11.1"]
+REQUIRES = ["pyyaml","requests", "onezoo-py>=1.12.0"]
 
 setup(
     name=NAME,
