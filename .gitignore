@@ -3,3 +3,4 @@
 /tools/downloader/build
 /tools/downloader/dist
 **/*.egg-info
+.*venv
